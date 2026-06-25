@@ -1,70 +1,108 @@
 # End-to-End LLM Serving Platform
 
-A modular LLM serving platform demonstrating 6 distinct patterns for LLM integration, optimized for Indonesian language and high-performance local inference.
+Platform serving LLM modular yang mendemonstrasikan 6 pola integrasi LLM berbeda, dioptimalkan untuk bahasa Indonesia dan inferensi lokal berperforma tinggi.
 
 [![Docker](https://img.shields.io/badge/Docker-enabled-blue.svg)](https://www.docker.com/)
 [![pgvector](https://img.shields.io/badge/pgvector-enabled-green.svg)](https://github.com/pgvector/pgvector)
 
-## Project Modules
+## Struktur Proyek
 
-1. **Project 1: Basic LLM & Indonesia Optimization** (Port 8001)
-   - Core LLM interaction with automatic Indonesian slang normalization using Saka-NLP.
-2. **Project 2: Dedicated Saka-NLP Optimization** (Port 8002)
-   - Specialized Indonesian language processing for professional contexts.
-3. **Project 3: Semantic Cache (pgvector)** (Port 8003)
-   - Cost and latency optimization using vector similarity search in PostgreSQL.
-4. **Project 4: Feedback Loop (pgvector)** (Port 8004)
-   - Interactive feedback collection (Like/Dislike) with persistent storage.
-5. **Project 5: RAG with FAISS** (Port 8005)
-   - Fast, local Retrieval-Augmented Generation using the Facebook AI Similarity Search library.
-6. **Project 6: RAG with pgvector** (Port 8006)
-   - Production-grade persistent RAG using a relational database with vector capabilities.
+```
+.
+├── backend/
+│   ├── p1_basic_llm.py          (Port 8001) - Basic LLM
+│   ├── p2_saka_id_optimization.py (Port 8002) - Saka-NLP Optimization
+│   ├── p3_cache_pgvector.py     (Port 8003) - Semantic Cache (pgvector)
+│   ├── p4_feedback_pgvector.py  (Port 8004) - Feedback Loop (pgvector)
+│   ├── p5_rag_faiss.py          (Port 8005) - RAG with FAISS
+│   ├── p6_rag_pgvector.py       (Port 8006) - RAG with pgvector
+│   ├── main.py
+│   ├── requirements.txt
+│   └── bin/                     (llama-server executable)
+├── frontend/
+│   └── index.html
+├── models/                      (tempat model GGUF)
+├── docker-compose.yml
+└── .env.example
+```
+
+## Modul Proyek
+
+1. **P1: Basic LLM** (Port 8001)
+   - Interaksi LLM dasar
+2. **P2: Saka-NLP Optimization** (Port 8002)
+   - Optimisasi bahasa Indonesia khusus
+3. **P3: Semantic Cache (pgvector)** (Port 8003)
+   - Optimisasi biaya dan latency menggunakan pencarian kesamaan vektor di PostgreSQL
+4. **P4: Feedback Loop (pgvector)** (Port 8004)
+   - Koleksi feedback interaktif (Like/Dislike) dengan penyimpanan persisten
+5. **P5: RAG with FAISS** (Port 8005)
+   - Retrieval-Augmented Generation cepat dan lokal menggunakan FAISS
+6. **P6: RAG with pgvector** (Port 8006)
+   - RAG persisten grade produksi menggunakan database relasional dengan kemampuan vektor
 
 ---
 
-## Getting Started
+## Memulai
 
-### 1. Install Docker Desktop
-To run the vector database and UI, you need Docker Desktop.
-- Download and install: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
-- Ensure Docker is running before proceeding.
+### 1. Instal Docker Desktop
+Untuk menjalankan database vektor dan UI, Anda memerlukan Docker Desktop.
+- Unduh dan instal: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+- Pastikan Docker berjalan sebelum melanjutkan.
 
-### 2. Start the Database
-Run the following command in the root directory to spin up the PostgreSQL (pgvector) and PgWeb UI:
+### 2. Konfigurasi Environment
+Salin file contoh environment dan sesuaikan sesuai kebutuhan:
+```bash
+cp .env.example .env
+```
+
+Edit file `.env` untuk mengkonfigurasi:
+- PostgreSQL (pgvector)
+- Model LLM
+- Port dan parameter lainnya
+
+### 3. Mulai Database
+Jalankan perintah berikut di direktori root untuk menyalakan PostgreSQL (pgvector) dan PgWeb UI:
 ```bash
 docker-compose up -d
 ```
-- **PostgreSQL**: `localhost:5432` (user: `user`, pass: `password`, db: `mydatabase`)
+- **PostgreSQL**: `localhost:5432` (sesuai `.env`)
 - **PgWeb UI**: `http://localhost:8081`
 
-### 3. Local Model Setup
-- Place your Qwen 2.5 GGUF model in the `models/` folder.
-- Ensure the filename in `main.py` matches your model file.
+### 4. Setup Model Lokal
+- Tempatkan model GGUF Anda di folder `models/`.
+- Pastikan nama file di `.env` sesuai dengan file model Anda.
 
-### 4. Running a Module
-Navigate to any module folder and follow the instructions in its `README.md`. Example:
+Contoh model yang didukung:
+- `qwen2.5-0.5b-instruct-q4_k_m.gguf`
+
+### 5. Instal Dependensi Backend
 ```bash
-cd backend/1_basic_llm
-python -m venv venv
-.\venv\Scripts\activate
+cd backend
 pip install -r requirements.txt
-uvicorn main:app --port 8001
 ```
 
-### 5. Frontend Dashboard
-Simply open `frontend/index.html` in your browser to access the central management interface.
+### 6. Menjalankan Modul
+Jalankan modul yang diinginkan dengan uvicorn. Contoh untuk P3:
+```bash
+cd backend
+uvicorn p3_cache_pgvector:app --port 8003
+```
+
+### 7. Frontend Dashboard
+Cukup buka `frontend/index.html` di browser Anda untuk mengakses antarmuka manajemen pusat.
 
 ---
 
-## Deployment to GitHub
-To push your changes to your repository:
+## Deploy ke GitHub
+Untuk mendorong perubahan ke repositori Anda:
 ```bash
 git push -u origin main
 ```
 
 ---
 
-## Resources
+## Sumber Daya
 - **Saka-NLP**: [Muhammad-Ikhwan-Fathulloh/Saka-NLP](https://github.com/Muhammad-Ikhwan-Fathulloh/Saka-NLP)
 - **Llama.cpp**: [ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp)
 - **pgvector**: [pgvector/pgvector](https://github.com/pgvector/pgvector)
