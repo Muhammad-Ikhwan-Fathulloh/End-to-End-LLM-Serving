@@ -1,15 +1,25 @@
+"""
+P4: Feedback Loop with pgvector
+================================
+Simpan interaksi + feedback pengguna di pgvector untuk evaluasi.
+Jalankan: uvicorn p4_feedback_pgvector:app --port 8004
+"""
+
 import os
 import time
 import platform
 import subprocess
 import asyncio
+import uuid
 from contextlib import asynccontextmanager
 
 import httpx
-import saka
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sentence_transformers import SentenceTransformer
+import psycopg2
+from pgvector.psycopg2 import register_vector
 
 # ---------------------------------------------------------------------------
 # Konfigurasi — bisa di-override lewat environment variable tanpa ubah kode.
@@ -26,7 +36,7 @@ MODEL_PATH = os.path.join(MODELS_DIR, LLM_MODEL_GGUF)
 _EXE_NAME = "llama-server.exe" if platform.system() == "Windows" else "llama-server"
 LLAMA_SERVER_EXE = os.path.join(BIN_DIR, _EXE_NAME)
 
-LLAMA_PORT = int(os.environ.get("LLAMA_PORT", "8080"))
+LLAMA_PORT = int(os.environ.get("LLAMA_PORT", "8084"))
 LLAMA_CTX = os.environ.get("LLAMA_CTX", "2048")
 # 0 = full CPU, aman & ringan untuk laptop tanpa GPU dedicated.
 # Naikkan nilainya kalau ada GPU NVIDIA/Metal supaya lebih cepat.
@@ -35,12 +45,15 @@ LLAMA_NGL = os.environ.get("LLAMA_NGL", "0")
 LLAMA_THREADS = os.environ.get("LLAMA_THREADS", str(max(1, (os.cpu_count() or 4) - 1)))
 LLAMA_READY_TIMEOUT = int(os.environ.get("LLAMA_READY_TIMEOUT", "60"))  # detik
 
+DB_CONFIG = os.environ.get("DB_CONFIG", "dbname=mydatabase user=user password=password host=localhost port=5432")
+
 # PENTING: pakai 127.0.0.1 (bukan "localhost"). Di Windows, "localhost" kadang
 # resolve ke ::1 (IPv6) dulu, sementara llama-server cuma listen di IPv4 —
 # ini bikin health-check lambat/gagal padahal servernya sudah hidup.
 LLAMA_BASE_URL = f"http://127.0.0.1:{LLAMA_PORT}"
-LOG_PATH = os.path.join(BASE_DIR, "llama_server.log")
+LOG_PATH = os.path.join(BASE_DIR, "llama_server_p4.log")
 
+embed_model = SentenceTransformer("all-MiniLM-L6-v2")
 state = {"process": None, "ready": False, "client": None}
 
 
@@ -51,6 +64,15 @@ def _read_log_tail(n_chars: int = 2000) -> str:
             return f.read()[-n_chars:]
     except OSError:
         return "(log tidak ditemukan)"
+
+
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(DB_CONFIG)
+        register_vector(conn)
+        return conn
+    except Exception:
+        return None
 
 
 async def start_llama_server() -> None:
@@ -70,7 +92,7 @@ async def start_llama_server() -> None:
         "--threads-batch", LLAMA_THREADS,
     ]
 
-    print(f"[P1] Menjalankan llama-server: {' '.join(cmd)}")
+    print(f"[P4] Menjalankan llama-server: {' '.join(cmd)}")
     log_file = open(LOG_PATH, "w")
     process = subprocess.Popen(
         cmd,
@@ -87,12 +109,12 @@ async def start_llama_server() -> None:
                 log_file.flush()
                 raise RuntimeError(
                     f"llama-server berhenti sendiri (exit code {process.returncode}).\n"
-                    f"--- isi llama_server.log ---\n{_read_log_tail()}"
+                    f"--- isi {LOG_PATH} ---\n{_read_log_tail()}"
                 )
             try:
                 resp = await probe.get(f"{LLAMA_BASE_URL}/health")
                 if resp.status_code == 200:
-                    print("[P1] llama-server siap.")
+                    print("[P4] llama-server siap.")
                     state["ready"] = True
                     return
             except httpx.HTTPError:
@@ -101,7 +123,7 @@ async def start_llama_server() -> None:
 
     raise RuntimeError(
         f"llama-server tidak siap setelah {LLAMA_READY_TIMEOUT} detik.\n"
-        f"--- isi llama_server.log ---\n{_read_log_tail()}"
+        f"--- isi {LOG_PATH} ---\n{_read_log_tail()}"
     )
 
 
@@ -120,18 +142,31 @@ async def lifespan(app: FastAPI):
     # Satu client yang dipakai ulang untuk semua request /chat — jauh lebih
     # ringan daripada buka-tutup koneksi TCP baru setiap kali ada chat masuk.
     state["client"] = httpx.AsyncClient(timeout=120.0)
+    
+    # Init DB
+    conn = get_db_connection()
+    if conn:
+        with conn.cursor() as cur:
+            cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+            cur.execute("CREATE TABLE IF NOT EXISTS interactions (interaction_id TEXT PRIMARY KEY, prompt TEXT, response TEXT, feedback BOOLEAN, embedding vector(384))")
+        conn.commit()
+        conn.close()
+        print("[P4] Database siap.")
+    else:
+        print("[P4] WARNING: Database tidak tersedia.")
+    
     try:
         await start_llama_server()
     except Exception as e:
         # App tetap dijalankan supaya /health bisa melaporkan masalahnya
         # dengan jelas, daripada FastAPI gagal start total tanpa pesan.
-        print(f"[P1] ERROR saat startup llama-server: {e}")
+        print(f"[P4] ERROR saat startup llama-server: {e}")
     yield
     stop_llama_server()
     await state["client"].aclose()
 
 
-app = FastAPI(title="P1: Basic LLM & Indonesia Optimization", lifespan=lifespan)
+app = FastAPI(title="P4: Feedback Loop with pgvector", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -143,9 +178,13 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     message: str
-    system_prompt: str = "You are a helpful assistant."
     temperature: float = Field(0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(256, ge=1, le=2048)  # batasi panjang jawaban -> lebih ringan & cepat
+
+
+class FeedbackRequest(BaseModel):
+    interaction_id: str
+    is_like: bool
 
 
 @app.get("/health")
@@ -164,30 +203,21 @@ async def chat(request: ChatRequest):
     if not state.get("ready"):
         raise HTTPException(
             status_code=503,
-            detail="Model backend belum siap. Cek endpoint /health atau file llama_server.log.",
+            detail=f"Model backend belum siap. Cek endpoint /health atau file {LOG_PATH}.",
         )
 
-    normalized_message = saka.normalize(request.message)
-
     payload = {
-        "messages": [
-            {
-                "role": "system",
-                "content": f"{request.system_prompt}. Jawablah dalam Bahasa Indonesia yang baik.",
-            },
-            {"role": "user", "content": normalized_message},
-        ],
+        "messages": [{"role": "user", "content": request.message}],
         "temperature": request.temperature,
         "max_tokens": request.max_tokens,
     }
-
     client: httpx.AsyncClient = state["client"]
     try:
         resp = await client.post(f"{LLAMA_BASE_URL}/v1/chat/completions", json=payload)
     except httpx.ConnectError:
         raise HTTPException(
             status_code=503,
-            detail="Tidak bisa terhubung ke llama-server. Proses backend mungkin sudah mati, cek llama_server.log.",
+            detail=f"Tidak bisa terhubung ke llama-server. Proses backend mungkin sudah mati, cek {LOG_PATH}.",
         )
 
     try:
@@ -196,17 +226,36 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=502, detail=f"Respons backend bukan JSON valid: {resp.text[:300]}")
 
     if "choices" not in result:
-        print(f"[P1] ERROR: Respons backend tidak terduga: {result}")
+        print(f"[P4] ERROR: Respons backend tidak terduga: {result}")
         raise HTTPException(status_code=502, detail=f"Backend Error: {result}")
 
-    return {
-        "original_input": request.message,
-        "normalized_input": normalized_message,
-        "response": result["choices"][0]["message"]["content"],
-    }
+    response_text = result["choices"][0]["message"]["content"]
+
+    interaction_id = str(uuid.uuid4())
+    embedding = embed_model.encode(request.message)
+    conn = get_db_connection()
+    if conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO interactions (interaction_id, prompt, response, embedding) VALUES (%s, %s, %s, %s)", (interaction_id, request.message, response_text, embedding))
+        conn.commit()
+        conn.close()
+
+    return {"interaction_id": interaction_id, "response": response_text}
+
+
+@app.post("/feedback")
+async def feedback(request: FeedbackRequest):
+    conn = get_db_connection()
+    if conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE interactions SET feedback = %s WHERE interaction_id = %s", (request.is_like, request.interaction_id))
+        conn.commit()
+        conn.close()
+        return {"status": "success"}
+    raise HTTPException(status_code=500, detail="Database tidak tersedia.")
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8004)

@@ -3,21 +3,31 @@ services:
     image: pgvector/pgvector:latest
     container_name: pgvector_db
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: mydatabase
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-mydatabase}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-mydatabase}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   pgweb:
-      image: sosedoff/pgweb:latest
-      container_name: pgweb_ui
-      ports:
-        - "8081:8081"
-      environment:
-        DATABASE_URL: postgres://user:password@db:5432/mydatabase?sslmode=disable
-      depends_on:
-        - db
+    image: sosedoff/pgweb:latest
+    container_name: pgweb_ui
+    ports:
+      - "${PGWEB_PORT:-8081}:8081"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-mydatabase}?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pgdata:

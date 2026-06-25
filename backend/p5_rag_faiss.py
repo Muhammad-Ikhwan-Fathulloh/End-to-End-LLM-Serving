@@ -1,3 +1,10 @@
+"""
+P5: RAG with FAISS
+===================
+Retrieval-Augmented Generation menggunakan FAISS untuk pencarian vektor lokal.
+Jalankan: uvicorn p5_rag_faiss:app --port 8005
+"""
+
 import os
 import time
 import platform
@@ -6,10 +13,12 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import httpx
-import saka
+import faiss
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sentence_transformers import SentenceTransformer
 
 # ---------------------------------------------------------------------------
 # Konfigurasi — bisa di-override lewat environment variable tanpa ubah kode.
@@ -26,7 +35,7 @@ MODEL_PATH = os.path.join(MODELS_DIR, LLM_MODEL_GGUF)
 _EXE_NAME = "llama-server.exe" if platform.system() == "Windows" else "llama-server"
 LLAMA_SERVER_EXE = os.path.join(BIN_DIR, _EXE_NAME)
 
-LLAMA_PORT = int(os.environ.get("LLAMA_PORT", "8080"))
+LLAMA_PORT = int(os.environ.get("LLAMA_PORT", "8085"))
 LLAMA_CTX = os.environ.get("LLAMA_CTX", "2048")
 # 0 = full CPU, aman & ringan untuk laptop tanpa GPU dedicated.
 # Naikkan nilainya kalau ada GPU NVIDIA/Metal supaya lebih cepat.
@@ -39,9 +48,19 @@ LLAMA_READY_TIMEOUT = int(os.environ.get("LLAMA_READY_TIMEOUT", "60"))  # detik
 # resolve ke ::1 (IPv6) dulu, sementara llama-server cuma listen di IPv4 —
 # ini bikin health-check lambat/gagal padahal servernya sudah hidup.
 LLAMA_BASE_URL = f"http://127.0.0.1:{LLAMA_PORT}"
-LOG_PATH = os.path.join(BASE_DIR, "llama_server.log")
+LOG_PATH = os.path.join(BASE_DIR, "llama_server_p5.log")
 
+embed_model = SentenceTransformer("all-MiniLM-L6-v2")
 state = {"process": None, "ready": False, "client": None}
+
+# Contoh dokumen — ganti dengan data Anda sendiri.
+DOCUMENTS = [
+    "The capital of Indonesia is Jakarta.",
+    "Saka-NLP is for Indonesian text optimization.",
+    "FAISS is a library for efficient similarity search.",
+    "Qwen2.5 is a large language model by Alibaba.",
+]
+faiss_index = None
 
 
 def _read_log_tail(n_chars: int = 2000) -> str:
@@ -70,7 +89,7 @@ async def start_llama_server() -> None:
         "--threads-batch", LLAMA_THREADS,
     ]
 
-    print(f"[P1] Menjalankan llama-server: {' '.join(cmd)}")
+    print(f"[P5] Menjalankan llama-server: {' '.join(cmd)}")
     log_file = open(LOG_PATH, "w")
     process = subprocess.Popen(
         cmd,
@@ -87,12 +106,12 @@ async def start_llama_server() -> None:
                 log_file.flush()
                 raise RuntimeError(
                     f"llama-server berhenti sendiri (exit code {process.returncode}).\n"
-                    f"--- isi llama_server.log ---\n{_read_log_tail()}"
+                    f"--- isi {LOG_PATH} ---\n{_read_log_tail()}"
                 )
             try:
                 resp = await probe.get(f"{LLAMA_BASE_URL}/health")
                 if resp.status_code == 200:
-                    print("[P1] llama-server siap.")
+                    print("[P5] llama-server siap.")
                     state["ready"] = True
                     return
             except httpx.HTTPError:
@@ -101,7 +120,7 @@ async def start_llama_server() -> None:
 
     raise RuntimeError(
         f"llama-server tidak siap setelah {LLAMA_READY_TIMEOUT} detik.\n"
-        f"--- isi llama_server.log ---\n{_read_log_tail()}"
+        f"--- isi {LOG_PATH} ---\n{_read_log_tail()}"
     )
 
 
@@ -117,21 +136,30 @@ def stop_llama_server() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global faiss_index
     # Satu client yang dipakai ulang untuk semua request /chat — jauh lebih
     # ringan daripada buka-tutup koneksi TCP baru setiap kali ada chat masuk.
     state["client"] = httpx.AsyncClient(timeout=120.0)
+    
+    # Build FAISS index
+    doc_embeddings = embed_model.encode(DOCUMENTS)
+    d = doc_embeddings.shape[1]
+    faiss_index = faiss.IndexFlatL2(d)
+    faiss_index.add(np.array(doc_embeddings).astype("float32"))
+    print(f"[P5] FAISS index siap ({len(DOCUMENTS)} dokumen).")
+    
     try:
         await start_llama_server()
     except Exception as e:
         # App tetap dijalankan supaya /health bisa melaporkan masalahnya
         # dengan jelas, daripada FastAPI gagal start total tanpa pesan.
-        print(f"[P1] ERROR saat startup llama-server: {e}")
+        print(f"[P5] ERROR saat startup llama-server: {e}")
     yield
     stop_llama_server()
     await state["client"].aclose()
 
 
-app = FastAPI(title="P1: Basic LLM & Indonesia Optimization", lifespan=lifespan)
+app = FastAPI(title="P5: RAG with FAISS", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -143,7 +171,6 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     message: str
-    system_prompt: str = "You are a helpful assistant."
     temperature: float = Field(0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(256, ge=1, le=2048)  # batasi panjang jawaban -> lebih ringan & cepat
 
@@ -164,30 +191,25 @@ async def chat(request: ChatRequest):
     if not state.get("ready"):
         raise HTTPException(
             status_code=503,
-            detail="Model backend belum siap. Cek endpoint /health atau file llama_server.log.",
+            detail=f"Model backend belum siap. Cek endpoint /health atau file {LOG_PATH}.",
         )
 
-    normalized_message = saka.normalize(request.message)
+    query_embedding = embed_model.encode([request.message])
+    D, I = faiss_index.search(np.array(query_embedding).astype("float32"), k=1)
+    context = DOCUMENTS[I[0][0]]
 
     payload = {
-        "messages": [
-            {
-                "role": "system",
-                "content": f"{request.system_prompt}. Jawablah dalam Bahasa Indonesia yang baik.",
-            },
-            {"role": "user", "content": normalized_message},
-        ],
+        "messages": [{"role": "user", "content": f"Context: {context}\n\nQuestion: {request.message}"}],
         "temperature": request.temperature,
         "max_tokens": request.max_tokens,
     }
-
     client: httpx.AsyncClient = state["client"]
     try:
         resp = await client.post(f"{LLAMA_BASE_URL}/v1/chat/completions", json=payload)
     except httpx.ConnectError:
         raise HTTPException(
             status_code=503,
-            detail="Tidak bisa terhubung ke llama-server. Proses backend mungkin sudah mati, cek llama_server.log.",
+            detail=f"Tidak bisa terhubung ke llama-server. Proses backend mungkin sudah mati, cek {LOG_PATH}.",
         )
 
     try:
@@ -196,17 +218,13 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=502, detail=f"Respons backend bukan JSON valid: {resp.text[:300]}")
 
     if "choices" not in result:
-        print(f"[P1] ERROR: Respons backend tidak terduga: {result}")
+        print(f"[P5] ERROR: Respons backend tidak terduga: {result}")
         raise HTTPException(status_code=502, detail=f"Backend Error: {result}")
 
-    return {
-        "original_input": request.message,
-        "normalized_input": normalized_message,
-        "response": result["choices"][0]["message"]["content"],
-    }
+    return {"response": result["choices"][0]["message"]["content"], "context": context}
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8005)
