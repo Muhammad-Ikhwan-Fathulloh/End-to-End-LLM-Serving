@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+httpx
+python-multipart
+Pillow
+sentence-transformers
+faiss-cpu
+psycopg2-binary
+pgvector

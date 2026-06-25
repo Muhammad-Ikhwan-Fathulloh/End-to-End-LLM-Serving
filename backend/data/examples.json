@@ -1,0 +1,38 @@
+[
+    {
+        "name": "Mechanical Gear Assembly",
+        "description": "Analysis of a standard mechanical gear components list with OCR errors.",
+        "request": {
+            "ocr_data": "MANUFACTURING BLUEPRINT - GEAR ASSEMBLY X10\nDRAWING NO: GA-2024-001 | REV: B\n-------------------------------------------\nBOM LIST:\n1. Spur Gear (Steel C45) | Qty: 4 | Spec: 40 Teeth, Module 2\n2. Driving Shaft | Qty: 2 | Material: Stainless Steel 304\n3. Ball Bearing (SKF 6204) | Qty: 8 | [OCR ERROR: qyt slightly blurred]\n4. M10 bolt x 45mm | Qty: 16 | Zinc Plated\n5. Casing Lower | Mat: Aluminum Die-Cast | Qty: 1\n-------------------------------------------\nNote: Check tolerance for shaft alignment (+- 0.05mm).",
+            "model_name": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+            "temperature": 0.2
+        }
+    },
+    {
+        "name": "Electronic Control Unit (ECU) BOM",
+        "description": "Surface mount components list for an industrial controller board.",
+        "request": {
+            "ocr_data": "PCB ASSEMBLY LIST: CTRL-MOD-V2\nDATE: 2026-05-12 | BATCH: 500 UNITS\nCOMPONENTS:\n- MCU STM32F407VGT6 | U1 | Qty: 1\n- CAP 10uF 0603 | C1, C2, C5 | Qty: 3\n- RES 10K 1% 0805 | R10, R11 | Qty: 2\n- CONN DB9 RA MALE | [READ ERROR: J?]\n- VOLT REG L7805CV | Qty: 1\n- [SMUDGE] ... Heat Sink Type-A",
+            "model_name": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+            "temperature": 0.1
+        }
+    },
+    {
+        "name": "Machine Maintenance Log",
+        "description": "OCR of a hand-filled maintenance record to identify parts replaced.",
+        "request": {
+            "ocr_data": "PREVENTIVE MAINTENANCE RECORD - CNC LATHE #04\nOPERATOR: RAJU | DATE: 22-06-2026\n-------------------------------------------\n- Replaced Coolant Pump Filter (P/N: FILT-442)\n- Checked Spindle Belt (Wear OK but loose)\n- REPLACEMENT: Drive Belt B-092 (Qty: 1)\n- Lubricated X-axis Guide Rails (SKF-LUBE-G)\n- STATUS: Operational, next check 22-09-2026",
+            "model_name": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+            "temperature": 0.3
+        }
+    },
+    {
+        "name": "Technical Drawing Metadata",
+        "description": "Extracting information from the title block of a technical drawing.",
+        "request": {
+            "ocr_data": "TITLE: HYDRAULIC CYLINDER HEAD\nDWG NO: HYD-CH-300-4\nMATERIAL: CAST IRON G25\nWEIGHT: 12.4 KG\nTOLERANCE CLASS: ISO 2768-mH\nAPPROVED BY: DR. ARIS\nSCALE: 1:1",
+            "model_name": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+            "temperature": 0.1
+        }
+    }
+]

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Models
+models/*.gguf
+models/mmproj*
+
+# Data/Temp
+backend/*/uploads/
+backend/*/data/
+.vscode/
+.idea/
+*.log

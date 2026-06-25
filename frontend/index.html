@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Serving Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            margin-bottom: 20px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 80%;
+        }
+
+        .user-msg {
+            background-color: #007bff;
+            color: white;
+            align-self: flex-end;
+            margin-left: auto;
+        }
+
+        .bot-msg {
+            background-color: #e9ecef;
+            color: #212529;
+            align-self: flex-start;
+        }
+
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-tabs .nav-link {
+            border-radius: 10px 10px 0 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container py-5">
+        <header class="text-center mb-5">
+            <h1 class="fw-bold">LLM Serving Dashboard</h1>
+            <p class="text-muted">6 Specialized LLM Integration Modules</p>
+        </header>
+
+        <ul class="nav nav-tabs mb-4" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#p1">P1: Basic
+                    ID</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#p2">P2:
+                    Saka-NLP</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#p3">P3: Cache</button>
+            </li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#p4">P4:
+                    Feedback</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#p5">P5: FAISS</button>
+            </li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#p6">P6: pgvector
+                    RAG</button></li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- Unified Chat Containers for each port -->
+            <div class="tab-pane fade show active" id="p1">
+                <div class="card p-4">
+                    <h5>P1: Basic LLM & ID Optimization (Port 8001)</h5>
+                    <div class="chat-container d-flex flex-column" id="chatP1"></div>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="inputP1" placeholder="Type here...">
+                        <button class="btn btn-primary" onclick="sendMessage(8001, 'P1')">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="p2">
+                <div class="card p-4">
+                    <h5>P2: Dedicated Saka-NLP Optimization (Port 8002)</h5>
+                    <div class="chat-container d-flex flex-column" id="chatP2"></div>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="inputP2" placeholder="Saka NLP Focus...">
+                        <button class="btn btn-dark" onclick="sendMessage(8002, 'P2')">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="p3">
+                <div class="card p-4">
+                    <h5>P3: Semantic Cache with pgvector (Port 8003)</h5>
+                    <div class="chat-container d-flex flex-column" id="chatP3"></div>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="inputP3">
+                        <button class="btn btn-success" onclick="sendMessage(8003, 'P3')">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="p4">
+                <div class="card p-4">
+                    <h5>P4: Feedback Loop with pgvector (Port 8004)</h5>
+                    <div class="chat-container d-flex flex-column" id="chatP4"></div>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="inputP4">
+                        <button class="btn btn-warning" onclick="sendMessage(8004, 'P4')">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="p5">
+                <div class="card p-4">
+                    <h5>P5: RAG with FAISS (Port 8005)</h5>
+                    <div class="chat-container d-flex flex-column" id="chatP5"></div>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="inputP5">
+                        <button class="btn btn-info" onclick="sendMessage(8005, 'P5')">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="p6">
+                <div class="card p-4">
+                    <h5>P6: RAG with pgvector (Port 8006)</h5>
+                    <div class="chat-container d-flex flex-column" id="chatP6"></div>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="inputP6">
+                        <button class="btn btn-danger" onclick="sendMessage(8006, 'P6')">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        async function sendMessage(port, id) {
+            const input = document.getElementById(`input${id}`);
+            const chat = document.getElementById(`chat${id}`);
+            const msg = input.value;
+            if (!msg) return;
+
+            appendMsg(chat, msg, 'user-msg');
+            input.value = '';
+
+            try {
+                const resp = await fetch(`http://localhost:${port}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: msg, query: msg })
+                });
+                const data = await resp.json();
+                let botText = data.response || "No response";
+                if (data.cached) botText = `(CACHED) ${botText}`;
+                appendMsg(chat, botText, 'bot-msg');
+
+                if (id === 'P4' && data.interaction_id) {
+                    const btnDiv = document.createElement('div');
+                    btnDiv.innerHTML = `<button onclick="fb('${data.interaction_id}', true)">👍</button><button onclick="fb('${data.interaction_id}', false)">👎</button>`;
+                    chat.appendChild(btnDiv);
+                }
+            } catch (e) {
+                appendMsg(chat, "Error: " + e.message, 'bot-msg text-danger');
+            }
+        }
+
+        function appendMsg(chat, text, cls) {
+            const d = document.createElement('div');
+            d.className = `message ${cls}`;
+            d.innerText = text;
+            chat.appendChild(d);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        async function fb(id, like) {
+            await fetch('http://localhost:8004/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ interaction_id: id, is_like: like })
+            });
+            alert("Feedback recorded!");
+        }
+    </script>
+</body>
+
+</html>

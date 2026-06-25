@@ -1,0 +1,25 @@
+services:
+  db:
+    image: ankane/pgvector:latest
+    container_name: pgvector_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydatabase
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  pgweb:
+    image: sosedoff/pgweb:latest
+    container_name: pgweb_ui
+    ports:
+      - "8081:8081"
+    environment:
+      DATABASE_URL: postgres://user:password@db:5432/mydatabase?sslmode=disable
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

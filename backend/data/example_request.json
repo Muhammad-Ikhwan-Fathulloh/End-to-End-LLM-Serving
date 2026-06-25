@@ -1,0 +1,5 @@
+{
+    "ocr_data": "MANUFACTURING BLUEPRINT - GEAR ASSEMBLY X10\nDRAWING NO: GA-2024-001 | REV: B\n-------------------------------------------\nBOM LIST:\n1. Spur Gear (Steel C45) | Qty: 4 | Spec: 40 Teeth, Module 2\n2. Driving Shaft | Qty: 2 | Material: Stainless Steel 304\n3. Ball Bearing (SKF 6204) | Qty: 8 | [OCR ERROR: qyt slightly blurred]\n4. M10 bolt x 45mm | Qty: 16 | Zinc Plated\n5. Casing Lower | Mat: Aluminum Die-Cast | Qty: 1\n-------------------------------------------\nNote: Check tolerance for shaft alignment (+- 0.05mm).",
+    "model_name": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "temperature": 0.2
+}
