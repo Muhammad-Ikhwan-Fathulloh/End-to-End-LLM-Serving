@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 venv/
 .env
+backend/.env
 
 # Models
 models/*.gguf

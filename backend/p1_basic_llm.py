@@ -11,6 +11,12 @@ import platform
 import subprocess
 import asyncio
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+# Muat konfigurasi dari file .env
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 import httpx
 import saka
@@ -22,8 +28,6 @@ from pydantic import BaseModel, Field
 # Konfigurasi — bisa di-override lewat environment variable tanpa ubah kode.
 # Contoh (PowerShell): $env:LLAMA_NGL="20"  (offload 20 layer ke GPU)
 # ---------------------------------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.dirname(BASE_DIR)
 MODELS_DIR = os.path.join(ROOT_DIR, "models")
 BIN_DIR = os.path.join(BASE_DIR, "bin")
 

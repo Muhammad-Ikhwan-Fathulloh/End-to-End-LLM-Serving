@@ -18,12 +18,12 @@ Platform serving LLM modular yang mendemonstrasikan 6 pola integrasi LLM berbeda
 │   ├── p6_rag_pgvector.py       (Port 8006) - RAG with pgvector
 │   ├── main.py
 │   ├── requirements.txt
+│   ├── .env.example             (Contoh konfigurasi environment)
 │   └── bin/                     (llama-server executable)
 ├── frontend/
 │   └── index.html
 ├── models/                      (tempat model GGUF)
-├── docker-compose.yml
-└── .env.example
+└── docker-compose.yml
 ```
 
 ## Modul Proyek
@@ -51,12 +51,13 @@ Untuk menjalankan database vektor dan UI, Anda memerlukan Docker Desktop.
 - Pastikan Docker berjalan sebelum melanjutkan.
 
 ### 2. Konfigurasi Environment
-Salin file contoh environment dan sesuaikan sesuai kebutuhan:
+Salin file contoh environment di folder `backend` dan sesuaikan sesuai kebutuhan:
 ```bash
+cd backend
 cp .env.example .env
 ```
 
-Edit file `.env` untuk mengkonfigurasi:
+Edit file `backend/.env` untuk mengkonfigurasi:
 - PostgreSQL (pgvector)
 - Model LLM
 - Port dan parameter lainnya
