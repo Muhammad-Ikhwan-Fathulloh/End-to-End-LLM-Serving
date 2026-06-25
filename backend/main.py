@@ -3,13 +3,13 @@ import subprocess
 import time
 import httpx
 import asyncio
+import saka
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Smart Manufacturing AI (Ultra-High Performance GGUF Mode)")
+app = FastAPI(title="P1: Basic LLM & Indonesia Optimization")
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,124 +19,105 @@ app.add_middleware(
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(os.path.dirname(BASE_DIR), "models")
+ROOT_DIR = os.path.dirname(BASE_DIR)
+MODELS_DIR = os.path.join(ROOT_DIR, "models")
 BIN_DIR = os.path.join(BASE_DIR, "bin")
 
-# Config
 LLM_MODEL_GGUF = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
 LLAMA_SERVER_EXE = os.path.join(BIN_DIR, "llama-server.exe")
 
-# Global Instance
-llm_server = None
-
-class PersistentGGUFServer:
-    def __init__(self, name: str, model_path: str, port: int, mmproj_path: str = None):
-        self.name = name
-        self.model_path = model_path
-        self.port = port
-        self.mmproj_path = mmproj_path
-        self.process = None
-
-    def start(self):
-        if not os.path.exists(self.model_path):
-            print(f"[{self.name}] ERROR: Model not found: {self.model_path}")
-            return False
-            
-        cmd = [
-            LLAMA_SERVER_EXE,
-            "-m", self.model_path,
-            "--port", str(self.port),
-            "-c", "2048",
-            "--n-gpu-layers", "0"  # Force CPU
-        ]
-        
-        if self.mmproj_path:
-            if os.path.exists(self.mmproj_path):
-                cmd.extend(["--mmproj", self.mmproj_path])
-                print(f"[{self.name}] Using mmproj: {self.mmproj_path}")
-            else:
-                print(f"[{self.name}] WARNING: MMProj not found: {self.mmproj_path}")
-
-        print(f"[{self.name}] Starting server on port {self.port} with command: {' '.join(cmd)}")
-        self.process = subprocess.Popen(
-            cmd, 
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True
-        )
-        
-        # Wait for ready
-        print(f"[{self.name}] Waiting for server to become ready (max 20s)...")
-        for i in range(20):
-            try:
-                with httpx.Client(timeout=2.0) as client:
-                    resp = client.get(f"http://localhost:{self.port}/health")
-                    if resp.status_code == 200:
-                        print(f"[{self.name}] Server is ready and listening on http://localhost:{self.port}")
-                        return True
-            except Exception as e:
-                # Check if process died
-                if self.process.poll() is not None:
-                    output, _ = self.process.communicate()
-                    print(f"[{self.name}] Server failed to start! Output:\n{output}")
-                    return False
-                pass
-            time.sleep(1)
-        
-        # If we got here, timeout
-        print(f"[{self.name}] ERROR: Server failed to start within 20 seconds!")
-        return False
-
-    def stop(self):
-        if self.process:
-            self.process.terminate()
-
-    async def generate_chat(self, messages: list):
-        url = f"http://localhost:{self.port}/v1/chat/completions"
-        payload = {
-            "messages": messages,
-            "temperature": 0.2
-        }
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, json=payload)
-            return resp.json()["choices"][0]["message"]["content"]
-
-@app.on_event("startup")
-async def startup_event():
-    global llm_server
-    
-    # Start LLM Engine (Qwen 2.5)
-    llm_model = os.path.join(MODELS_DIR, LLM_MODEL_GGUF)
-    llm_server = PersistentGGUFServer("LLM", llm_model, 8080)
-    llm_server.start()
-
-@app.on_event("shutdown")
-def shutdown_event():
-    if llm_server: llm_server.stop()
+llm_server_process = None
 
 class ChatRequest(BaseModel):
     message: str
-    system_prompt: str = "You are a professional manufacturing engineer."
+    system_prompt: str = "You are a helpful assistant."
+
+@app.on_event("startup")
+async def startup_event():
+    global llm_server_process
+    
+    model_path = os.path.join(MODELS_DIR, LLM_MODEL_GGUF)
+    # Use relative path for model if possible to avoid space issues in some binaries
+    rel_model_path = os.path.relpath(model_path, BIN_DIR)
+    
+    cmd = [
+        LLAMA_SERVER_EXE,
+        "-m", model_path,
+        "--port", "8080",
+        "-c", "2048",
+        "--n-gpu-layers", "0"
+    ]
+    
+    print(f"[P1] Starting LLM Server: {' '.join(cmd)} in {BIN_DIR}")
+    
+    # Write logs to a file for better debugging
+    log_file = open(os.path.join(BASE_DIR, "llama_server.log"), "w")
+    try:
+        llm_server_process = subprocess.Popen(
+            cmd, 
+            cwd=BIN_DIR,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+    except Exception as e:
+        print(f"[P1] ERROR: Failed to Popen: {e}")
+        return
+    
+    # Wait for ready
+    max_retries = 30
+    for i in range(max_retries):
+        if llm_server_process.poll() is not None:
+            stdout, stderr = llm_server_process.communicate()
+            print(f"[P1] LLM Server died immediately! Stderr: {stderr}")
+            break
+            
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get("http://localhost:8080/health")
+                if resp.status_code == 200:
+                    print(f"[P1] LLM Server is ready.")
+                    break
+        except:
+            pass
+        await asyncio.sleep(1)
+
+@app.on_event("shutdown")
+def shutdown_event():
+    if llm_server_process:
+        llm_server_process.terminate()
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
+    # Normalize input for Indonesian
+    normalized_message = saka.normalize(request.message)
+    
+    url = "http://localhost:8080/v1/chat/completions"
+    payload = {
+        "messages": [
+            {"role": "system", "content": f"{request.system_prompt}. Jawablah dalam Bahasa Indonesia yang baik."},
+            {"role": "user", "content": normalized_message}
+        ],
+        "temperature": 0.7
+    }
+    
     try:
-        messages = [
-            {"role": "system", "content": request.system_prompt},
-            {"role": "user", "content": request.message}
-        ]
-        response = await llm_server.generate_chat(messages)
-
-        return {
-            "response": response,
-            "status": "success"
-        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, json=payload)
+            print(f"[P1] Backend status: {resp.status_code}")
+            result = resp.json()
+            if "choices" not in result:
+                print(f"[P1] ERROR: Unexpected backend response from {url}: {result}")
+                raise HTTPException(status_code=500, detail=f"Backend Error: {result}")
+            return {
+                "original_input": request.message,
+                "normalized_input": normalized_message,
+                "response": result["choices"][0]["message"]["content"]
+            }
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
+        print(f"[P1] Exception in /chat: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
