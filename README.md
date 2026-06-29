@@ -85,6 +85,8 @@ Contoh model yang didukung:
 ### 5. Instal Dependensi Backend
 ```bash
 cd backend
+python -m venv venv
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
