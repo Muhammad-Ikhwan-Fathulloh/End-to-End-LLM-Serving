@@ -70,6 +70,11 @@ docker-compose up -d
 - **PostgreSQL**: `localhost:5432` (sesuai `.env`)
 - **PgWeb UI**: `http://localhost:8081`
 
+Jalankan perintah berikut di direktori root untuk memberhentikan PostgreSQL (pgvector) dan PgWeb UI:
+```bash
+docker-compose down
+```
+
 ### 4. Setup Model Lokal
 - Tempatkan model GGUF Anda di folder `models/`.
 - Pastikan nama file di `.env` sesuai dengan file model Anda.
