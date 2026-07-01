@@ -19,6 +19,7 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 import httpx
+# pyrefly: ignore [missing-import]
 import faiss
 import numpy as np
 from fastapi import FastAPI, HTTPException

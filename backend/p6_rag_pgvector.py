@@ -75,8 +75,38 @@ def get_db_connection():
         conn = psycopg2.connect(DB_CONFIG)
         register_vector(conn)
         return conn
-    except Exception:
+    except Exception as e:
+        print(f"[P6] DB connection error: {e}")
         return None
+
+
+def init_db(max_retries: int = 5, retry_delay: float = 2.0) -> bool:
+    """Buat tabel documents jika belum ada, dengan retry mechanism."""
+    for attempt in range(1, max_retries + 1):
+        print(f"[P6] Mencoba koneksi database (percobaan {attempt}/{max_retries})...")
+        conn = get_db_connection()
+        if conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                    cur.execute(
+                        "CREATE TABLE IF NOT EXISTS documents "
+                        "(id SERIAL PRIMARY KEY, content TEXT, "
+                        "embedding vector(384))"
+                    )
+                conn.commit()
+                print("[P6] Database siap — tabel 'documents' sudah tersedia.")
+                return True
+            except Exception as e:
+                print(f"[P6] Gagal membuat tabel: {e}")
+                conn.rollback()
+            finally:
+                conn.close()
+        if attempt < max_retries:
+            print(f"[P6] Menunggu {retry_delay}s sebelum retry...")
+            time.sleep(retry_delay)
+    print("[P6] WARNING: Database tidak tersedia setelah semua percobaan, RAG dinonaktifkan.")
+    return False
 
 
 async def start_llama_server() -> None:
@@ -147,17 +177,8 @@ async def lifespan(app: FastAPI):
     # ringan daripada buka-tutup koneksi TCP baru setiap kali ada chat masuk.
     state["client"] = httpx.AsyncClient(timeout=120.0)
     
-    # Init DB
-    conn = get_db_connection()
-    if conn:
-        with conn.cursor() as cur:
-            cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            cur.execute("CREATE TABLE IF NOT EXISTS documents (id SERIAL PRIMARY KEY, content TEXT, embedding vector(384))")
-        conn.commit()
-        conn.close()
-        print("[P6] Database siap.")
-    else:
-        print("[P6] WARNING: Database tidak tersedia, RAG dinonaktifkan.")
+    # Init DB dengan retry — pastikan tabel otomatis terbuat
+    init_db()
     
     try:
         await start_llama_server()
