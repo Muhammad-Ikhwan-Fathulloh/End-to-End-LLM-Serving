@@ -11,3 +11,4 @@ pgvector
 pytz
 saka-nlp
 python-dotenv
+pypdf

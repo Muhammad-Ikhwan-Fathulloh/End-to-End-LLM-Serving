@@ -70,10 +70,11 @@ def _read_log_tail(n_chars: int = 2000) -> str:
         return "(log tidak ditemukan)"
 
 
-def get_db_connection():
+def get_db_connection(register: bool = True):
     try:
         conn = psycopg2.connect(DB_CONFIG)
-        register_vector(conn)
+        if register:
+            register_vector(conn)
         return conn
     except Exception as e:
         print(f"[P6] DB connection error: {e}")
@@ -84,11 +85,16 @@ def init_db(max_retries: int = 5, retry_delay: float = 2.0) -> bool:
     """Buat tabel documents jika belum ada, dengan retry mechanism."""
     for attempt in range(1, max_retries + 1):
         print(f"[P6] Mencoba koneksi database (percobaan {attempt}/{max_retries})...")
-        conn = get_db_connection()
+        conn = get_db_connection(register=False)
         if conn:
             try:
                 with conn.cursor() as cur:
                     cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                conn.commit()
+                
+                # Register vector once the extension is guaranteed to exist
+                register_vector(conn)
+                with conn.cursor() as cur:
                     cur.execute(
                         "CREATE TABLE IF NOT EXISTS documents "
                         "(id SERIAL PRIMARY KEY, content TEXT, "
@@ -263,6 +269,36 @@ async def chat(request: ChatRequest):
     return {"response": result["choices"][0]["message"]["content"], "context": context}
 
 
+class AddTextRequest(BaseModel):
+    texts: list[str] = Field(..., description="Daftar teks untuk ditambahkan ke database")
+
+
+@app.post("/add-text")
+async def add_text(request: AddTextRequest):
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    
+    inserted_count = 0
+    try:
+        with conn.cursor() as cur:
+            for text in request.texts:
+                if not text.strip():
+                    continue
+                embedding = embed_model.encode(text)
+                cur.execute(
+                    "INSERT INTO documents (content, embedding) VALUES (%s, %s)",
+                    (text, embedding)
+                )
+                inserted_count += 1
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        conn.close()
+        
+    return {"status": "success", "inserted": inserted_count}
 if __name__ == "__main__":
     import uvicorn
 
